@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --yes)",
+      "Bash(ls:*)",
+      "Bash(npm install)",
+      "Bash(npm run init-db:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(cat:*)",
+      "Bash(npm run test-search:*)",
+      "Bash(npm run test-embedding:*)",
+      "Bash(npm run clear-db:*)",
+      "Bash(tsx scripts/testQueries.ts:*)",
+      "Bash(npx tsx:*)",
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(timeout 5 curl:*)",
+      "Bash(node -e \"const { createClient } = require\\(''@supabase/supabase-js''\\); require\\(''dotenv''\\).config\\({ path: ''.env'' }\\); const supabase = createClient\\(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY\\); async function check\\(\\) { const { data } = await supabase.from\\(''documents''\\).select\\(''metadata''\\).ilike\\(''metadata->>source'', ''%YT8522%''\\).or\\(''content.ilike.%clock%,content.ilike.%CLKIN%''\\); const pages = [...new Set\\(data.map\\(d => parseInt\\(d.metadata.page\\)\\)\\)].sort\\(\\(a,b\\) => a-b\\); console.log\\(''包含时钟信息的YT8522文档页码:'', pages.join\\('', ''\\)\\); } check\\(\\);\")",
+      "Bash(node -e:*)",
+      "Bash(for file in *Selection*.pdf)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(done)"
+    ]
+  }
+}

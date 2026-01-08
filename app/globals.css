@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0e27;
+  --foreground: #ffffff;
+  --primary: #0066e6;
+}
+
+body {
+  color: var(--foreground);
+  background: linear-gradient(135deg, #0a0e27 0%, #1a2456 50%, #0a0e27 100%);
+  min-height: 100vh;
+}
+
+/* 自定义滚动条样式 - 用于表格横向滚动 */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.5) rgba(255, 255, 255, 0.1);
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.7);
+}

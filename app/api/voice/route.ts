@@ -6,6 +6,7 @@ import { correctSpeechText } from '@/lib/speechCorrection'
 const client = new OpenAI({
   apiKey: process.env.SILICONFLOW_API_KEY!,
   baseURL: 'https://api.siliconflow.cn/v1',
+  timeout: 30000, // 30秒超时
 })
 
 export async function POST(request: NextRequest) {
@@ -41,12 +42,31 @@ export async function POST(request: NextRequest) {
 
     // 调用硅基流动的语音识别API
     // 添加专业术语热词提示，提高技术词汇识别准确率
-    const response = await client.audio.transcriptions.create({
-      file: file,
-      model: 'FunAudioLLM/SenseVoiceSmall', // 硅基流动提供的中文语音识别模型
-      language: 'zh',
-      prompt: 'YT8522 YT8512 YT8531 YT8010 YT8011 PHY Switch LED0 LED1 RGMII SGMII MII RMII TX RX link ping 常亮 闪烁 百兆 千兆 车规 以太网 寄存器', // 专业术语热词
-    })
+    let response
+    try {
+      response = await client.audio.transcriptions.create({
+        file: file,
+        model: 'FunAudioLLM/SenseVoiceSmall', // 硅基流动提供的中文语音识别模型
+        language: 'zh',
+        prompt: 'YT8522 YT8512 YT8531 YT8010 YT8011 PHY Switch LED0 LED1 RGMII SGMII MII RMII TX RX link ping 常亮 闪烁 百兆 千兆 车规 以太网 寄存器', // 专业术语热词
+      })
+    } catch (apiError: any) {
+      const duration = Date.now() - startTime
+      console.error('语音识别API调用失败:', {
+        duration: `${duration}ms`,
+        error: apiError.message,
+        code: apiError.code,
+      })
+
+      // 根据错误类型返回不同的提示
+      if (apiError.code === 'ETIMEDOUT' || duration > 30000) {
+        return NextResponse.json(
+          { error: '语音识别超时，请检查网络连接后重试' },
+          { status: 504 }
+        )
+      }
+      throw apiError // 其他错误继续抛出
+    }
 
     const duration = Date.now() - startTime
     const originalText = response.text || ''

@@ -13,8 +13,39 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
   const [input, setInput] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false) // 新增：语音识别处理中
+  const [retryCount, setRetryCount] = useState(0) // 重试次数
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+
+  // 语音识别重试函数
+  const recognizeVoice = async (formData: FormData, attempt: number = 1): Promise<any> => {
+    const maxRetries = 3
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 35000) // 35秒超时
+
+    try {
+      const response = await fetch('/api/voice', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+      return await response.json()
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+
+      // 网络错误且还有重试次数
+      if (attempt < maxRetries && (error.name === 'AbortError' || error.message.includes('fetch'))) {
+        console.log(`语音识别失败，正在重试 (${attempt}/${maxRetries})...`)
+        setRetryCount(attempt)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)) // 递增延迟：1s, 2s, 3s
+        return recognizeVoice(formData, attempt + 1)
+      }
+
+      throw error
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,26 +86,30 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
 
         // 开始处理语音识别
         setIsProcessing(true)
+        setRetryCount(0) // 重置重试计数
 
         try {
-          const response = await fetch('/api/voice', {
-            method: 'POST',
-            body: formData,
-          })
+          const data = await recognizeVoice(formData)
 
-          const data = await response.json()
           if (data.text) {
             // 将识别的文字填入输入框，让用户可以修改后再发送
             setInput(data.text)
           } else if (data.error) {
             alert(`语音识别失败: ${data.error}`)
           }
-        } catch (error) {
-          console.error('语音识别失败:', error)
-          alert('语音识别服务暂时不可用，请使用文字输入')
+        } catch (error: any) {
+          console.error('语音识别最终失败:', error)
+
+          // 区分超时错误和其他错误
+          if (error.name === 'AbortError') {
+            alert('语音识别超时，请检查网络连接后重试\n建议：\n1. 录制较短的语音（10秒内）\n2. 如持续失败，请使用文字输入')
+          } else {
+            alert('语音识别服务暂时不可用，请使用文字输入')
+          }
         } finally {
           // 识别完成，关闭处理状态
           setIsProcessing(false)
+          setRetryCount(0) // 重置重试计数
         }
 
         stream.getTracks().forEach(track => track.stop())
@@ -108,18 +143,29 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
                 handleSubmit(e)
               }
             }}
-            placeholder={isProcessing ? "正在识别语音..." : "输入您的问题... (Shift+Enter 换行)"}
+            placeholder={
+              isProcessing
+                ? retryCount > 0
+                  ? `正在重试识别 (${retryCount}/3)...`
+                  : "正在识别语音，请稍候..."
+                : "输入您的问题... (Shift+Enter 换行)"
+            }
             disabled={disabled || isProcessing}
             className="w-full px-4 py-3 bg-white/5 border border-primary-500/30 rounded-xl text-white text-base placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none backdrop-blur-sm leading-relaxed"
             rows={2}
           />
           {isProcessing && (
-            <div className="absolute right-3 top-3">
+            <div className="absolute right-3 top-3 flex items-center gap-2">
               <div className="flex space-x-1">
                 <div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                 <div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
+              {retryCount > 0 && (
+                <span className="text-xs text-yellow-400">
+                  重试 {retryCount}/3
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -203,7 +249,13 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
           {isRecording ? (
             <span className="text-red-400">🎤 正在录音中...</span>
           ) : isProcessing ? (
-            <span className="text-primary-300">⏳ 正在识别语音，请稍候...</span>
+            retryCount > 0 ? (
+              <span className="text-yellow-300">
+                🔄 网络较慢，正在重试识别 ({retryCount}/3)...
+              </span>
+            ) : (
+              <span className="text-primary-300">⏳ 正在识别语音，请稍候...</span>
+            )
           ) : (
             '支持文字输入或按住麦克风按钮语音输入（识别后可编辑）'
           )}

@@ -14,14 +14,17 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false) // 新增：语音识别处理中
   const [retryCount, setRetryCount] = useState(0) // 重试次数
+  const [recordingTime, setRecordingTime] = useState(0) // 录音时长（秒）
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const maxRecordingTime = 30 // 最大录音时长30秒
 
   // 语音识别重试函数
   const recognizeVoice = async (formData: FormData, attempt: number = 1): Promise<any> => {
     const maxRetries = 3
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 35000) // 35秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 25000) // 缩短到25秒超时（音频已优化）
 
     try {
       const response = await fetch('/api/voice', {
@@ -62,24 +65,49 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
           echoCancellation: true,  // 回声消除
           noiseSuppression: true,  // 噪音抑制
           autoGainControl: true,   // 自动增益控制
+          sampleRate: 16000,       // 降低采样率到16kHz（语音识别足够）
         }
       })
 
-      // 提升录音音质：使用opus编码器，比特率提升到128kbps
+      // 优化录音参数：降低比特率到24kbps，减小文件大小，加快传输
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: 128000  // 从默认64kbps提升到128kbps
+        audioBitsPerSecond: 24000  // 从128kbps降到24kbps（语音识别足够）
       })
 
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
+      setRecordingTime(0)
+
+      // 启动录音计时器
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          const newTime = prev + 1
+          // 达到最大时长自动停止
+          if (newTime >= maxRecordingTime) {
+            stopRecording()
+          }
+          return newTime
+        })
+      }, 1000)
 
       mediaRecorder.ondataavailable = (event) => {
         audioChunksRef.current.push(event.data)
       }
 
       mediaRecorder.onstop = async () => {
+        // 清除计时器
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
+        }
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+
+        console.log('录音完成:', {
+          duration: `${recordingTime}秒`,
+          size: `${(audioBlob.size / 1024).toFixed(2)}KB`,
+        })
 
         const formData = new FormData()
         formData.append('audio', audioBlob)
@@ -110,6 +138,7 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
           // 识别完成，关闭处理状态
           setIsProcessing(false)
           setRetryCount(0) // 重置重试计数
+          setRecordingTime(0) // 重置录音时长
         }
 
         stream.getTracks().forEach(track => track.stop())
@@ -127,6 +156,12 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop()
       setIsRecording(false)
+
+      // 清除计时器
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
     }
   }
 
@@ -183,13 +218,18 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
           type="button"
           onClick={toggleRecording}
           disabled={disabled || isProcessing}
-          className={`p-4 rounded-xl transition-all ${
+          className={`relative p-4 rounded-xl transition-all ${
             isRecording
               ? 'bg-red-500 hover:bg-red-600 animate-pulse'
               : 'bg-primary-600 hover:bg-primary-500'
           } text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
           title={isRecording ? '点击结束录音' : '点击开始录音'}
         >
+          {isRecording && (
+            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+              {recordingTime}秒 / {maxRecordingTime}秒
+            </div>
+          )}
           <svg
             className="w-6 h-6"
             fill="none"
@@ -253,7 +293,9 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
       <div className="mt-3 flex items-center justify-between">
         <div className="text-xs text-gray-400">
           {isRecording ? (
-            <span className="text-red-400">🎤 正在录音中...</span>
+            <span className="text-red-400">
+              🎤 正在录音中... ({recordingTime}秒 / 最长{maxRecordingTime}秒)
+            </span>
           ) : isProcessing ? (
             retryCount > 0 ? (
               <span className="text-yellow-300">
@@ -263,7 +305,7 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
               <span className="text-primary-300">⏳ 正在识别语音，请稍候...</span>
             )
           ) : (
-            '支持文字输入或点击麦克风按钮语音输入（识别后可编辑）'
+            '支持文字输入或点击麦克风按钮语音输入（最长30秒，识别后可编辑）'
           )}
         </div>
         <div className="text-xs text-gray-500">

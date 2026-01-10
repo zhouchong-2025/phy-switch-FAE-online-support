@@ -71,6 +71,11 @@ export interface HistoryMessage {
 function expandQueryTerms(question: string): string {
   let expandedQuery = question
 
+  // 选型/推荐 -> 强制添加Product Selection Guide相关术语
+  if (/选型|推荐|有哪些|什么型号|产品系列|产品线/i.test(question)) {
+    expandedQuery += ' Product Selection Guide 产品选型 产品系列 型号对比'
+  }
+
   // 商规 -> 添加"消费级"同义词
   if (/商规/i.test(question)) {
     expandedQuery += ' 消费级'
@@ -225,11 +230,30 @@ export async function answerQuestion(
     ))
   }
 
-  // 车规查询增强：如果问题包含车规相关关键词，且结果中没有Product Selection Guide，则强制添加
-  const isAutomotiveQuery = /车规|automotive|AEC-Q100|车载/i.test(question)
+  // 选型查询增强：如果是选型问题，且结果中没有Product Selection Guide，则强制添加
   const hasProductGuide = searchResults.some(r => r.source.includes('Product Selection Guide'))
 
-  if (isAutomotiveQuery && !hasProductGuide) {
+  if (isSelectionQuery && !hasProductGuide) {
+    console.log('检测到选型查询，但缺少Product Selection Guide，正在补充...')
+
+    // 直接搜索Product Selection Guide
+    const selectionQuery = 'Product Selection Guide 产品选型 型号对比 产品系列'
+    const additionalResults = await searchDocuments(selectionQuery, 8)
+    const productGuideResults = additionalResults.filter(r =>
+      r.source.includes('Product Selection Guide')
+    )
+
+    if (productGuideResults.length > 0) {
+      console.log(`补充了 ${productGuideResults.length} 个Product Selection Guide文档`)
+      // 将Product Selection Guide结果插入到最前面（优先级最高）
+      searchResults.unshift(...productGuideResults.slice(0, 2))
+    }
+  }
+
+  // 车规查询增强：如果问题包含车规相关关键词，且结果中没有Product Selection Guide，则强制添加
+  const isAutomotiveQuery = /车规|automotive|AEC-Q100|车载/i.test(question)
+
+  if (isAutomotiveQuery && !searchResults.some(r => r.source.includes('Product Selection Guide'))) {
     console.log('检测到车规查询，但缺少Product Selection Guide，正在补充...')
 
     // 直接搜索Product Selection Guide中包含Automotive的内容（减少到8个）
@@ -413,11 +437,30 @@ export async function* answerQuestionStream(
     ))
   }
 
+  // 选型查询增强：如果是选型问题，且结果中没有Product Selection Guide，则强制添加
+  const hasProductGuideStream = searchResults.some(r => r.source.includes('Product Selection Guide'))
+
+  if (isSelectionQuery && !hasProductGuideStream) {
+    console.log('检测到选型查询，但缺少Product Selection Guide，正在补充...')
+
+    // 直接搜索Product Selection Guide
+    const selectionQuery = 'Product Selection Guide 产品选型 型号对比 产品系列'
+    const additionalResults = await searchDocuments(selectionQuery, 8)
+    const productGuideResults = additionalResults.filter(r =>
+      r.source.includes('Product Selection Guide')
+    )
+
+    if (productGuideResults.length > 0) {
+      console.log(`补充了 ${productGuideResults.length} 个Product Selection Guide文档`)
+      // 将Product Selection Guide结果插入到最前面（优先级最高）
+      searchResults.unshift(...productGuideResults.slice(0, 2))
+    }
+  }
+
   // 车规查询增强：如果问题包含车规相关关键词，且结果中没有Product Selection Guide，则强制添加
   const isAutomotiveQuery = /车规|automotive|AEC-Q100|车载/i.test(question)
-  const hasProductGuide = searchResults.some(r => r.source.includes('Product Selection Guide'))
 
-  if (isAutomotiveQuery && !hasProductGuide) {
+  if (isAutomotiveQuery && !searchResults.some(r => r.source.includes('Product Selection Guide'))) {
     console.log('检测到车规查询，但缺少Product Selection Guide，正在补充...')
 
     // 直接搜索Product Selection Guide中包含Automotive的内容（减少到8个）

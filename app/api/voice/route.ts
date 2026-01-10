@@ -6,7 +6,7 @@ import { correctSpeechText } from '@/lib/speechCorrection'
 const client = new OpenAI({
   apiKey: process.env.SILICONFLOW_API_KEY!,
   baseURL: 'https://api.siliconflow.cn/v1',
-  timeout: 30000, // 30秒超时
+  timeout: 20000, // 缩短到20秒超时（音频已优化，识别更快）
 })
 
 export async function POST(request: NextRequest) {
@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
       type: audioFile.type,
     })
 
-    // 检查音频大小（超过10MB可能有问题）
-    if (audioFile.size > 10 * 1024 * 1024) {
+    // 检查音频大小（优化后30秒录音约90KB，设置2MB上限足够）
+    if (audioFile.size > 2 * 1024 * 1024) {
       return NextResponse.json(
-        { error: '音频文件过大，请录制较短的语音' },
+        { error: '音频文件过大，请录制较短的语音（建议10秒内）' },
         { status: 400 }
       )
     }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       })
 
       // 根据错误类型返回不同的提示
-      if (apiError.code === 'ETIMEDOUT' || duration > 30000) {
+      if (apiError.code === 'ETIMEDOUT' || duration > 20000) {
         return NextResponse.json(
           { error: '语音识别超时，请检查网络连接后重试' },
           { status: 504 }

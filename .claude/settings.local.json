@@ -25,7 +25,8 @@
       "Bash(if [ -d \"D:\\\\Chong AI Project\\\\phy-switch-FAE-online-support\\\\.vercel\" ])",
       "Bash(then ls -la \"D:\\\\Chong AI Project\\\\phy-switch-FAE-online-support\\\\.vercel\")",
       "Bash(else echo \"No .vercel directory found\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "Bash(npm run build:*)"
     ]
   }
 }

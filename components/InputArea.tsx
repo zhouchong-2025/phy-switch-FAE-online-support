@@ -130,6 +130,15 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
     }
   }
 
+  // 点击切换录音状态
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
   return (
     <div className="border-t border-primary-500/20 bg-primary-900/50 backdrop-blur-sm px-6 py-6">
       <form onSubmit={handleSubmit} className="flex items-center space-x-3">
@@ -172,17 +181,14 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
 
         <button
           type="button"
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          onTouchStart={startRecording}
-          onTouchEnd={stopRecording}
+          onClick={toggleRecording}
           disabled={disabled || isProcessing}
           className={`p-4 rounded-xl transition-all ${
             isRecording
               ? 'bg-red-500 hover:bg-red-600 animate-pulse'
               : 'bg-primary-600 hover:bg-primary-500'
           } text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
-          title={isRecording ? '松开结束录音' : '按住说话'}
+          title={isRecording ? '点击结束录音' : '点击开始录音'}
         >
           <svg
             className="w-6 h-6"
@@ -257,7 +263,7 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
               <span className="text-primary-300">⏳ 正在识别语音，请稍候...</span>
             )
           ) : (
-            '支持文字输入或按住麦克风按钮语音输入（识别后可编辑）'
+            '支持文字输入或点击麦克风按钮语音输入（识别后可编辑）'
           )}
         </div>
         <div className="text-xs text-gray-500">

@@ -10,7 +10,8 @@
     "init-db": "tsx scripts/initDatabase.ts",
     "clear-db": "tsx scripts/clearDatabase.ts",
     "test-search": "tsx scripts/testSearch.ts",
-    "test-embedding": "tsx scripts/testEmbedding.ts"
+    "test-embedding": "tsx scripts/testEmbedding.ts",
+    "check-pages": "tsx scripts/checkPageNumbers.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",

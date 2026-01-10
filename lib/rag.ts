@@ -76,6 +76,11 @@ function expandQueryTerms(question: string): string {
     expandedQuery += ' Product Selection Guide 产品选型 产品系列 型号对比'
   }
 
+  // 硬件设计 -> 添加相关术语
+  if (/硬件|hardware|设计|design|电路|circuit|layout|pcb/i.test(question)) {
+    expandedQuery += ' hardware design layout PCB application circuit schematic reference decoupling 应用电路 参考设计 原理图'
+  }
+
   // 商规 -> 添加"消费级"同义词
   if (/商规/i.test(question)) {
     expandedQuery += ' 消费级'
@@ -228,6 +233,37 @@ export async function answerQuestion(
     console.log('相似度分布:', searchResults.map(r =>
       `${r.source.substring(0, 20)}... (${(r.similarity * 100).toFixed(1)}%)`
     ))
+  }
+
+  // 硬件设计查询增强：如果是硬件设计问题，强制补充Datasheet的Application章节
+  const isHardwareDesignQuery = /硬件.*设计|设计.*硬件|hardware.*design|design.*hardware|电路.*设计|设计.*注意|application.*circuit|pcb.*layout/i.test(question)
+
+  if (isHardwareDesignQuery && modelNumbers.length > 0) {
+    console.log('检测到硬件设计查询，检查是否需要补充Application章节...')
+
+    // 检查是否已包含Datasheet的Application Diagram章节（第17页）
+    const hasApplicationDiagram = searchResults.some(r =>
+      r.source.includes('Datasheet') &&
+      r.content.toLowerCase().includes('application diagram')
+    )
+
+    if (!hasApplicationDiagram) {
+      console.log('缺少Application Diagram章节，正在补充...')
+
+      // 搜索Application Diagram章节
+      const appQuery = `${modelNumbers.join(' ')} Application Diagram circuit schematic`
+      const additionalResults = await searchDocuments(appQuery, 5)
+      const appDiagramResults = additionalResults.filter(r =>
+        r.source.includes('Datasheet') &&
+        (r.content.toLowerCase().includes('application') || r.content.toLowerCase().includes('diagram'))
+      )
+
+      if (appDiagramResults.length > 0) {
+        console.log(`补充了 ${appDiagramResults.length} 个Application相关章节`)
+        // 插入到前面（优先级较高）
+        searchResults.splice(3, 0, ...appDiagramResults.slice(0, 1))
+      }
+    }
   }
 
   // 选型查询增强：如果是选型问题，且结果中没有Product Selection Guide，则强制添加
@@ -435,6 +471,37 @@ export async function* answerQuestionStream(
     console.log('相似度分布:', searchResults.map(r =>
       `${r.source.substring(0, 20)}... (${(r.similarity * 100).toFixed(1)}%)`
     ))
+  }
+
+  // 硬件设计查询增强：如果是硬件设计问题，强制补充Datasheet的Application章节
+  const isHardwareDesignQuery = /硬件.*设计|设计.*硬件|hardware.*design|design.*hardware|电路.*设计|设计.*注意|application.*circuit|pcb.*layout/i.test(question)
+
+  if (isHardwareDesignQuery && modelNumbers.length > 0) {
+    console.log('检测到硬件设计查询，检查是否需要补充Application章节...')
+
+    // 检查是否已包含Datasheet的Application Diagram章节
+    const hasApplicationDiagram = searchResults.some(r =>
+      r.source.includes('Datasheet') &&
+      r.content.toLowerCase().includes('application diagram')
+    )
+
+    if (!hasApplicationDiagram) {
+      console.log('缺少Application Diagram章节，正在补充...')
+
+      // 搜索Application Diagram章节
+      const appQuery = `${modelNumbers.join(' ')} Application Diagram circuit schematic`
+      const additionalResults = await searchDocuments(appQuery, 5)
+      const appDiagramResults = additionalResults.filter(r =>
+        r.source.includes('Datasheet') &&
+        (r.content.toLowerCase().includes('application') || r.content.toLowerCase().includes('diagram'))
+      )
+
+      if (appDiagramResults.length > 0) {
+        console.log(`补充了 ${appDiagramResults.length} 个Application相关章节`)
+        // 插入到前面（优先级较高）
+        searchResults.splice(3, 0, ...appDiagramResults.slice(0, 1))
+      }
+    }
   }
 
   // 选型查询增强：如果是选型问题，且结果中没有Product Selection Guide，则强制添加

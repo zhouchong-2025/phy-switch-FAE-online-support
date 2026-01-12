@@ -309,7 +309,7 @@ export default function InputArea({ onSendMessage, onStopGeneration, disabled, i
           )}
         </div>
         <div className="text-xs text-gray-500">
-          Teampo Intelligent v1.0
+          Teampo Intelligence v1.0
         </div>
       </div>
     </div>

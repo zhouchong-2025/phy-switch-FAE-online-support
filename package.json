@@ -11,7 +11,13 @@
     "clear-db": "tsx scripts/clearDatabase.ts",
     "test-search": "tsx scripts/testSearch.ts",
     "test-embedding": "tsx scripts/testEmbedding.ts",
-    "check-pages": "tsx scripts/checkPageNumbers.ts"
+    "check-pages": "tsx scripts/checkPageNumbers.ts",
+    "test-ocr": "tsx test-ocr.js",
+    "test-schematic-img": "tsx test-schematic-img.js",
+    "test-qwen-vl": "tsx test-qwen-vl.js",
+    "test-qwen3-vl": "tsx test-qwen3-vl.js",
+    "compare-schematic": "tsx compare-schematic.js",
+    "fae-review": "tsx fae-review-test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",

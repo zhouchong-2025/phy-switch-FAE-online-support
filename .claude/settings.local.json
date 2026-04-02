@@ -27,7 +27,25 @@
       "Bash(else echo \"No .vercel directory found\")",
       "Bash(fi)",
       "Bash(npm run build:*)",
-      "Bash(npm run check-pages:*)"
+      "Bash(npm run check-pages:*)",
+      "Bash(node test-api.js:*)",
+      "Bash(ping:*)",
+      "Bash(nslookup:*)",
+      "Bash(npm run test-ocr:*)",
+      "Bash(for file in \"./Database/Auto Product _ Phy Selection Guide.pdf\" \"./Database/PHY Q&A.pdf\")",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(npm run test-schematic:*)",
+      "mcp__puppeteer__puppeteer_navigate",
+      "mcp__puppeteer__puppeteer_screenshot",
+      "mcp__puppeteer__puppeteer_click",
+      "mcp__puppeteer__puppeteer_evaluate",
+      "Bash(npm run test-schematic-img:*)",
+      "Bash(npm run test-qwen-vl:*)",
+      "Bash(npm run compare-schematic:*)",
+      "Bash(npm run test-qwen3-vl:*)",
+      "Bash(npm run fae-review:*)",
+      "Bash(timeout /t 5)"
     ]
   }
 }

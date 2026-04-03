@@ -13,7 +13,7 @@ import fs from 'fs'
 import path from 'path'
 
 export const runtime = 'nodejs'
-export const maxDuration = 600 // 10分钟超时（包含两次VLM分析 + review生成）
+export const maxDuration = 300 // Vercel Hobby计划最大允许300秒
 
 export async function POST(request: NextRequest) {
   try {

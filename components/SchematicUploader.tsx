@@ -147,6 +147,32 @@ export default function SchematicUploader() {
 
         if (done) {
           console.log('[SSE] 流读取完成，总共', chunkCount, '个chunks')
+
+          // 处理剩余的buffer
+          if (buffer.trim()) {
+            console.log('[SSE] 处理剩余buffer:', buffer.substring(0, 100))
+            const lines = buffer.split('\n')
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const jsonStr = line.slice(6)
+                  console.log('[SSE] [最后] 准备解析JSON，长度:', jsonStr.length)
+                  const data = JSON.parse(jsonStr)
+                  console.log('[SSE] [最后] 接收到数据:', data.type)
+
+                  if (data.type === 'complete') {
+                    console.log('[SSE] [最后] 收到完成事件，设置结果')
+                    setReviewResult(data.result)
+                    setProgressMessage('完成！')
+                    setProgressPercent(100)
+                  }
+                } catch (parseError: any) {
+                  console.error('❌ [最后] 解析失败:', parseError.message)
+                }
+              }
+            }
+          }
+
           break
         }
 

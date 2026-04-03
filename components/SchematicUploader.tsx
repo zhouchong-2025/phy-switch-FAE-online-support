@@ -107,52 +107,61 @@ export default function SchematicUploader() {
     setIsAnalyzing(true)
     setError(null)
     setReviewResult(null)
+    setProgress(null)
 
     try {
       const formData = new FormData()
       formData.append('customerSchematic', selectedFile)
       formData.append('chipModel', chipModel)
 
-      console.log('开始 FAE Review:', {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        chipModel: chipModel,
-      })
-
       const response = await fetch('/api/compare-schematic', {
         method: 'POST',
         body: formData,
       })
 
-      console.log('响应状态:', response.status)
-      console.log('响应头:', Object.fromEntries(response.headers.entries()))
-
-      // 检查响应Content-Type，防止解析HTML错误页
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text()
-        console.error('非JSON响应:', text)
-        throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 200)}`)
-      }
-
-      const data = await response.json()
-      console.log('响应数据:', data)
-
       if (!response.ok) {
-        throw new Error(data.error || 'Review失败')
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      setReviewResult(data)
-    } catch (err: any) {
-      console.error('Review 错误:', err)
-      // 更详细的错误信息
-      if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        setError('网络连接失败，��检查：1) 是否已启动开发服务器 2) 网络连接是否正常')
-      } else {
-        setError(err.message || 'Review失败')
+      // 处理 SSE 流式响应
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) throw new Error('无法读取响应流')
+
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6))
+
+            if (data.type === 'progress') {
+              setProgress({
+                step: data.step,
+                totalSteps: data.totalSteps,
+                message: data.message,
+                percentage: data.percentage,
+              })
+            } else if (data.type === 'error') {
+              throw new Error(data.error)
+            } else if (data.type === 'complete') {
+              setReviewResult(data)
+            }
+          }
+        }
       }
+    } catch (err: any) {
+      setError(err.message || 'Review失败')
     } finally {
       setIsAnalyzing(false)
+      setProgress(null)
     }
   }
 
@@ -161,6 +170,7 @@ export default function SchematicUploader() {
     setPreviewUrl(null)
     setReviewResult(null)
     setError(null)
+    setProgress(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -278,14 +288,32 @@ export default function SchematicUploader() {
 
       {/* 分析进度 */}
       {isAnalyzing && (
-        <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <div className="animate-spin text-5xl mb-4">⚙️</div>
-          <p className="text-white font-medium mb-2">
-            正在生成FAE Review...
-          </p>
-          <p className="text-gray-400 text-sm">
-            对比参考设计并生成专业建议，预计需要3-5分钟
-          </p>
+        <div className="bg-gray-800 rounded-lg p-6">
+          <div className="text-center mb-4">
+            <div className="animate-spin text-5xl mb-4">⚙️</div>
+            <p className="text-white font-medium mb-2">
+              {progress ? progress.message : '正在生成FAE Review...'}
+            </p>
+          </div>
+
+          {/* 进度条 */}
+          {progress && (
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm text-gray-400">
+                <span>步骤 {progress.step} / {progress.totalSteps}</span>
+                <span>{progress.percentage}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-primary-500 h-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress.percentage}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-400 text-center">
+                {progress.step === 4 ? '最后一步，马上完成...' : '预计还需要2-3分钟'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

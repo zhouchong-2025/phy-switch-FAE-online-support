@@ -125,6 +125,13 @@ export default function SchematicUploader() {
         body: formData,
       })
 
+      // 检查响应Content-Type，防止解析HTML错误页
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 200)}`)
+      }
+
       const data = await response.json()
 
       if (!response.ok) {
@@ -155,6 +162,13 @@ export default function SchematicUploader() {
         method: 'POST',
         body: formData,
       })
+
+      // 检查响应Content-Type，防止解析HTML错误页
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 200)}`)
+      }
 
       const data = await response.json()
 

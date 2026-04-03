@@ -145,7 +145,7 @@ function extractModelNumbers(text: string): string[] {
   const fullMatches = text.match(/YT\d{3,4}[A-Z]*/gi) || []
   results.push(...fullMatches.map(m => m.toUpperCase()))
 
-  // 2. 匹配简写格式：8522, 8512等（4位数字，使用word boundary）
+  // 2. 匹配简���格式：8522, 8512等（4位数字，使用word boundary）
   const shortMatches = text.match(/\b\d{4}\b/g) || []
   for (const match of shortMatches) {
     // 只处理85xx系列（裕太微PHY芯片的型号范围）
@@ -155,6 +155,53 @@ function extractModelNumbers(text: string): string[] {
   }
 
   return [...new Set(results)]
+}
+
+/**
+ * 动态计算最优检索文档数量
+ * 根据查询类型和复杂度智能调整，平衡速度和准确性
+ */
+function getOptimalSearchCount(question: string, modelNumbers: string[]): number {
+  // 简单事实查询：2-3个文档就够了
+  if (/电压|频率|温度|封装|多少|什么是|引脚数/i.test(question)) {
+    console.log('[检索优化] 检测到简单事实查询，使用3个文档')
+    return 3
+  }
+
+  // 对比查询：根据型号数量调整（每个型号2-3个文档）
+  if (/对比|区别|差异|比较|vs/i.test(question) && modelNumbers.length > 1) {
+    const count = Math.min(modelNumbers.length * 3, 10)
+    console.log(`[检索优化] 检测到对比查询（${modelNumbers.length}个型号），使用${count}个文档`)
+    return count
+  }
+
+  // 选型推荐查询：需要更多文档覆盖全产品线
+  if (/选型|推荐|有哪些|什么型号|选择|适合|可以用|有没有|建议/i.test(question)) {
+    console.log('[检索优化] 检测到选型查询，使用8个文档')
+    return 8
+  }
+
+  // 硬件设计查询：需要详细的Application信息
+  if (/硬件设计|电路设计|layout|pcb|走线|阻抗|application/i.test(question)) {
+    console.log('[检索优化] 检测到硬件设计查询，使用6个文档')
+    return 6
+  }
+
+  // 调试/故障排查：需要多方面信息
+  if (/调试|debug|不工作|问题|故障|错误|失败/i.test(question)) {
+    console.log('[检索优化] 检测到调试查询，使用7个文档')
+    return 7
+  }
+
+  // 寄存器配置查询：中等复杂度
+  if (/寄存器|register|配置|config|设置/i.test(question)) {
+    console.log('[检索优化] 检测到寄存器查询，使用5个文档')
+    return 5
+  }
+
+  // 默认值：平衡速度和准确性
+  console.log('[检索优化] 使用默认检索数量5个文档')
+  return 5
 }
 
 /**
@@ -225,8 +272,11 @@ export async function answerQuestion(
     console.log('术语扩展后的查询:', expandedQuestion)
   }
 
-  // 1. 检索相关文档（减少到6个，提升速度）
-  const searchResults = await searchDocuments(expandedQuestion, 6)
+  // 动态计算最优检索数量
+  const optimalSearchCount = getOptimalSearchCount(expandedQuestion, modelNumbers)
+
+  // 1. 检索相关文档（使用动态数量）
+  const searchResults = await searchDocuments(expandedQuestion, optimalSearchCount)
 
   console.log(`检索到 ${searchResults.length} 个相关文档块`)
   if (searchResults.length > 0) {
@@ -463,8 +513,11 @@ export async function* answerQuestionStream(
     console.log('术语扩展后的查询:', expandedQuestion)
   }
 
-  // 1. 检索相关文档（减少到6个，提升速度）
-  const searchResults = await searchDocuments(expandedQuestion, 6)
+  // 动态计算最优检索数量
+  const optimalSearchCount = getOptimalSearchCount(expandedQuestion, modelNumbers)
+
+  // 1. 检索相关文档（使用动态数量）
+  const searchResults = await searchDocuments(expandedQuestion, optimalSearchCount)
 
   console.log(`检索到 ${searchResults.length} 个相关文档块`)
   if (searchResults.length > 0) {

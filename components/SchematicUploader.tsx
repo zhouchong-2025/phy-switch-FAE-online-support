@@ -41,6 +41,8 @@ export default function SchematicUploader() {
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'analyze' | 'review'>('analyze')
   const [chipModel, setChipModel] = useState('YT8522')
+  const [progressMessage, setProgressMessage] = useState<string>('')
+  const [progressPercent, setProgressPercent] = useState<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
@@ -140,7 +142,23 @@ export default function SchematicUploader() {
 
       setAnalysisResult(data)
     } catch (err: any) {
-      setError(err.message || '分析失败')
+      console.error('分析错误:', err)
+
+      // 友好的错误提示
+      let errorMessage = '分析失败'
+      if (err.message.includes('fetch') || err.message.includes('网络')) {
+        errorMessage = '❌ 网络连接失败，请检查网络后重试'
+      } else if (err.message.includes('timeout') || err.message.includes('超时')) {
+        errorMessage = '❌ 分析超时（可能文件过大），请稍后重试'
+      } else if (err.message.includes('500')) {
+        errorMessage = '❌ 服务器错误，请稍后重试或联系技术支持'
+      } else if (err.message.includes('400') || err.message.includes('格式')) {
+        errorMessage = '❌ 文件格式或大小不符合要求'
+      } else {
+        errorMessage = `❌ ${err.message}`
+      }
+
+      setError(errorMessage)
     } finally {
       setIsAnalyzing(false)
     }
@@ -152,6 +170,8 @@ export default function SchematicUploader() {
     setIsAnalyzing(true)
     setError(null)
     setReviewResult(null)
+    setProgressMessage('正在准备...')
+    setProgressPercent(0)
 
     try {
       const formData = new FormData()
@@ -163,22 +183,77 @@ export default function SchematicUploader() {
         body: formData,
       })
 
-      // 检查响应Content-Type，防止解析HTML错误页
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text()
-        throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 200)}`)
+      if (!response.ok && !response.headers.get('content-type')?.includes('text/event-stream')) {
+        // 非SSE响应的错误处理
+        const contentType = response.headers.get('content-type')
+        if (contentType?.includes('application/json')) {
+          const data = await response.json()
+          throw new Error(data.error || 'Review失败')
+        } else {
+          throw new Error(`服务器错误 (${response.status})`)
+        }
       }
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Review失败')
+      // 处理SSE流
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法读取响应流')
       }
 
-      setReviewResult(data)
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // 保留未完成的行
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.type === 'progress') {
+                setProgressMessage(data.message)
+                setProgressPercent(data.progress)
+              } else if (data.type === 'complete') {
+                setReviewResult(data.result)
+                setProgressMessage('完成！')
+                setProgressPercent(100)
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (parseError) {
+              console.error('解析SSE数据失败:', parseError, line)
+            }
+          }
+        }
+      }
     } catch (err: any) {
-      setError(err.message || 'Review失败')
+      console.error('Review错误:', err)
+
+      // 友好的错误提示
+      let errorMessage = 'Review失败'
+      if (err.message.includes('fetch') || err.message.includes('网络')) {
+        errorMessage = '❌ 网络连接失败，请检查网络后重试'
+      } else if (err.message.includes('timeout') || err.message.includes('超时')) {
+        errorMessage = '❌ 分析超时（可能文件过大），请稍后重试'
+      } else if (err.message.includes('500')) {
+        errorMessage = '❌ 服务器错误，请稍后重试或联系技术支持'
+      } else if (err.message.includes('400') || err.message.includes('格式')) {
+        errorMessage = '❌ 文件格式或大小不符合要求'
+      } else if (err.message.includes('404') || err.message.includes('未找到')) {
+        errorMessage = `❌ 未找到${chipModel}的参考设计文件`
+      } else {
+        errorMessage = `❌ ${err.message}`
+      }
+
+      setError(errorMessage)
+      setProgressMessage('')
+      setProgressPercent(0)
     } finally {
       setIsAnalyzing(false)
     }
@@ -344,16 +419,32 @@ export default function SchematicUploader() {
 
       {/* 分析进度 */}
       {isAnalyzing && (
-        <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <div className="animate-spin text-5xl mb-4">⚙️</div>
-          <p className="text-white font-medium mb-2">
-            {mode === 'analyze' ? '正在分析原理图...' : '正在生成FAE Review...'}
-          </p>
-          <p className="text-gray-400 text-sm">
-            {mode === 'analyze'
-              ? '使用VLM深度识别中，预计需要1-2分钟'
-              : '对比参考设计并生成专业建议，预计需要3-5分钟'}
-          </p>
+        <div className="bg-gray-800 rounded-lg p-6">
+          <div className="text-center mb-4">
+            <div className="animate-spin text-5xl mb-4">⚙️</div>
+            <p className="text-white font-medium mb-2">
+              {mode === 'analyze'
+                ? '正在分析原理图...'
+                : progressMessage || '正在生成FAE Review...'}
+            </p>
+            {mode === 'review' && progressPercent > 0 && (
+              <div className="mt-4">
+                {/* 进度条 */}
+                <div className="w-full bg-gray-700 rounded-full h-3 mb-2 overflow-hidden">
+                  <div
+                    className="bg-primary-500 h-3 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <p className="text-gray-400 text-sm">{progressPercent}%</p>
+              </div>
+            )}
+            <p className="text-gray-400 text-sm mt-2">
+              {mode === 'analyze'
+                ? '使用VLM深度识别中，预计需要1-2分钟'
+                : '正在对比参考设计并���成专业建议'}
+            </p>
+          </div>
         </div>
       )}
 

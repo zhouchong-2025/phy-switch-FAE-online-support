@@ -416,6 +416,19 @@ export async function analyzeSchematicSmart(
     const base64 = Buffer.from(buffer).toString('base64')
     console.log('[分析] Base64 转换完成，长度:', base64.length)
 
+    // 检查Base64大小限制（防止API崩溃）
+    const MAX_BASE64_SIZE = 15 * 1024 * 1024 // 15MB Base64限制（对应约11MB原始文件）
+    const estimatedOriginalSize = base64.length * 0.75 // Base64大小 ≈ 原始大小 × 1.33
+
+    if (base64.length > MAX_BASE64_SIZE) {
+      throw new Error(
+        `文件过大（Base64编码后约${(base64.length / 1024 / 1024).toFixed(1)}MB），` +
+        `建议将文件压缩至${(MAX_BASE64_SIZE * 0.75 / 1024 / 1024).toFixed(1)}MB以下再上传`
+      )
+    }
+
+    console.log('[分析] Base64大小检查通过，原始文件约', (estimatedOriginalSize / 1024 / 1024).toFixed(2), 'MB')
+
     return analyzeSchematicWithVLM(base64)
   } catch (error: any) {
     console.error('[分析] 发生错误:', error)

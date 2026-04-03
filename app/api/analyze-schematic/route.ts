@@ -60,9 +60,17 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('原理图分析失败:', error)
+    console.error('错误堆栈:', error.stack)
     return NextResponse.json(
-      { error: error.message || '服务器内部错误' },
-      { status: 500 }
+      {
+        error: error.message || '服务器内部错误',
+        details: error.stack,
+        type: error.constructor.name
+      },
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     )
   }
 }

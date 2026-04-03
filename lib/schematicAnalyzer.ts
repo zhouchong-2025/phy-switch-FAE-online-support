@@ -4,13 +4,7 @@
  */
 
 import OpenAI from 'openai'
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
-
-// PDF worker 配置（使用 public 目录下的 worker 文件）
-if (typeof window === 'undefined') {
-  // Vercel serverless 环境使用绝对路径
-  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-}
+import pdfParse from 'pdf-parse'
 
 const client = new OpenAI({
   apiKey: process.env.SILICONFLOW_API_KEY!,
@@ -201,25 +195,19 @@ export interface FAEReviewResult {
 
 /**
  * 从PDF提取文本内容（用于参考设计）
+ * 使用 pdf-parse 替代 pdfjs-dist，更适合 serverless 环境
  */
 export async function extractPDFText(buffer: ArrayBuffer): Promise<string> {
-  const data = new Uint8Array(buffer)
-  const pdf = await pdfjs.getDocument({
-    data,
-    useSystemFonts: true,
-    disableFontFace: true,
-  }).promise
+  console.log('[PDF] 开始提取文本，buffer 大小:', buffer.byteLength)
 
-  let fullText = ''
-
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum)
-    const textContent = await page.getTextContent()
-    const pageText = textContent.items.map((item: any) => item.str).join(' ')
-    fullText += `\n--- Page ${pageNum} ---\n${pageText}\n`
+  try {
+    const data = await pdfParse(Buffer.from(buffer))
+    console.log('[PDF] 提取成功，总页数:', data.numpages, '文本长度:', data.text.length)
+    return data.text
+  } catch (error: any) {
+    console.error('[PDF] 提取失败:', error.message)
+    throw new Error(`PDF 文本提取失败: ${error.message}`)
   }
-
-  return fullText
 }
 
 /**
@@ -398,19 +386,43 @@ ${FAE_REVIEW_PROMPT}
 export async function analyzeSchematicSmart(
   file: File
 ): Promise<SchematicAnalysisResult> {
-  // PDF文件：优先使用文本提取
-  if (file.type === 'application/pdf') {
-    const buffer = await file.arrayBuffer()
-    const text = await extractPDFText(buffer)
+  console.log('[分析] 文件类型:', file.type, '大小:', file.size)
 
-    // 如果提取到足够的文本（>1000字符），使用文本分析
-    if (text.length > 1000) {
-      return analyzeReferenceText(text)
+  try {
+    // PDF文件：优先使用文本提取
+    if (file.type === 'application/pdf') {
+      console.log('[分析] PDF 文件，尝试文本提取')
+      const buffer = await file.arrayBuffer()
+      const text = await extractPDFText(buffer)
+      console.log('[分析] 提取文本长度:', text.length)
+
+      // 如果提取到足够的文本（>1000字符），使用文本分析
+      if (text.length > 1000) {
+        console.log('[分析] 文本足够，使用文本分析')
+        return analyzeReferenceText(text)
+      }
+      console.log('[分析] 文本不足，切换到 VLM')
+    }
+
+    // 图片文件或PDF文本不足：使用VLM
+    console.log('[分析] 使用 VLM 分析')
+    const buffer = await file.arrayBuffer()
+
+    // 检查 Buffer 是否可用
+    if (typeof Buffer === 'undefined') {
+      throw new Error('Buffer 在当前环境中不可用，请检查 runtime 配置')
+    }
+
+    const base64 = Buffer.from(buffer).toString('base64')
+    console.log('[分析] Base64 转换完成，长度:', base64.length)
+
+    return analyzeSchematicWithVLM(base64)
+  } catch (error: any) {
+    console.error('[分析] 发生错误:', error)
+    return {
+      success: false,
+      error: `分析失败: ${error.message}`,
+      duration: 0,
     }
   }
-
-  // 图片文件或PDF文本不足：使用VLM
-  const buffer = await file.arrayBuffer()
-  const base64 = Buffer.from(buffer).toString('base64')
-  return analyzeSchematicWithVLM(base64)
 }

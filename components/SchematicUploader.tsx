@@ -28,6 +28,12 @@ export default function SchematicUploader() {
   const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [chipModel, setChipModel] = useState('YT8522')
+  const [progress, setProgress] = useState<{
+    step: number
+    totalSteps: number
+    message: string
+    percentage: number
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {

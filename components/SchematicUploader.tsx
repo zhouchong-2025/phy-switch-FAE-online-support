@@ -107,19 +107,30 @@ export default function SchematicUploader() {
       formData.append('customerSchematic', selectedFile)
       formData.append('chipModel', chipModel)
 
+      console.log('开始 FAE Review:', {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        chipModel: chipModel,
+      })
+
       const response = await fetch('/api/compare-schematic', {
         method: 'POST',
         body: formData,
       })
 
+      console.log('响应状态:', response.status)
+      console.log('响应头:', Object.fromEntries(response.headers.entries()))
+
       // 检查响应Content-Type，防止解析HTML错误页
       const contentType = response.headers.get('content-type')
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text()
+        console.error('非JSON响应:', text)
         throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 200)}`)
       }
 
       const data = await response.json()
+      console.log('响应数据:', data)
 
       if (!response.ok) {
         throw new Error(data.error || 'Review失败')
@@ -127,7 +138,13 @@ export default function SchematicUploader() {
 
       setReviewResult(data)
     } catch (err: any) {
-      setError(err.message || 'Review失败')
+      console.error('Review 错误:', err)
+      // 更详细的错误信息
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        setError('网络连接失败，��检查：1) 是否已启动开发服务器 2) 网络连接是否正常')
+      } else {
+        setError(err.message || 'Review失败')
+      }
     } finally {
       setIsAnalyzing(false)
     }

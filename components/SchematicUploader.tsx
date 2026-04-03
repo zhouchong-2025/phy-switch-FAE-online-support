@@ -135,10 +135,20 @@ export default function SchematicUploader() {
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let chunkCount = 0
+
+      console.log('[SSE] 开始读取流')
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        chunkCount++
+
+        console.log(`[SSE] 读取chunk ${chunkCount}, done=${done}, size=${value?.length || 0}`)
+
+        if (done) {
+          console.log('[SSE] 流读取完成，总共', chunkCount, '个chunks')
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
@@ -147,7 +157,10 @@ export default function SchematicUploader() {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6))
+              const jsonStr = line.slice(6)
+              console.log('[SSE] 准备解析JSON，长度:', jsonStr.length)
+
+              const data = JSON.parse(jsonStr)
               console.log('[SSE] 接收到数据:', data.type, data)
 
               if (data.type === 'progress') {
@@ -162,8 +175,16 @@ export default function SchematicUploader() {
               } else if (data.type === 'error') {
                 throw new Error(data.error)
               }
-            } catch (parseError) {
-              console.error('解析SSE数据失败:', parseError, line)
+            } catch (parseError: any) {
+              console.error('❌ 解析SSE数据失败:', parseError)
+              console.error('❌ 原始行内容:', line)
+              console.error('❌ 行长度:', line.length)
+              console.error('❌ 错误详情:', parseError.message)
+
+              // 如果是JSON解析错误，可能是数据太大被截断
+              if (parseError instanceof SyntaxError) {
+                setError('❌ 数据解析失败，可能是返回数据过大')
+              }
             }
           }
         }

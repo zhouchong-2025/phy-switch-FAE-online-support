@@ -48,7 +48,8 @@
       "Bash(timeout /t 5)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

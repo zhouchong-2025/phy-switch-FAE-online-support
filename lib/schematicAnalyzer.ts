@@ -6,9 +6,10 @@
 import OpenAI from 'openai'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 
-// PDF worker 配置
+// PDF worker 配置（使用 public 目录下的 worker 文件）
 if (typeof window === 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.mjs'
+  // Vercel serverless 环境使用绝对路径
+  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 }
 
 const client = new OpenAI({

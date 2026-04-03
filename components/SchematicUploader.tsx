@@ -135,78 +135,45 @@ export default function SchematicUploader() {
 
       const decoder = new TextDecoder()
       let buffer = ''
-      let chunkCount = 0
-
-      console.log('[SSE] 开始读取流')
 
       while (true) {
         const { done, value } = await reader.read()
-        chunkCount++
-
-        console.log(`[SSE] 读取chunk ${chunkCount}, done=${done}, size=${value?.length || 0}`)
 
         if (done) {
-          console.log('[SSE] 流读取完成，总共', chunkCount, '个chunks')
-
-          // 处理剩余的buffer
+          // 处理剩余的buffer（关键修复：确保最后的数据被处理）
           if (buffer.trim()) {
-            console.log('[SSE] 处理剩余buffer，长度:', buffer.length)
-            console.log('[SSE] 剩余buffer内容:', buffer.substring(0, 200))
             const lines = buffer.split('\n')
-            console.log('[SSE] 剩余buffer分割出', lines.length, '行')
-
             for (const line of lines) {
-              console.log('[SSE] [最后] 处理行:', line.substring(0, 50))
-
               if (line.startsWith('data: ')) {
                 try {
-                  const jsonStr = line.slice(6)
-                  console.log('[SSE] [最后] 准备解析JSON，长度:', jsonStr.length)
-                  const data = JSON.parse(jsonStr)
-                  console.log('[SSE] [最后] 接收到数据:', data.type)
-
+                  const data = JSON.parse(line.slice(6))
                   if (data.type === 'complete') {
-                    console.log('[SSE] [最后] 收到完成事件，设置结果')
                     setReviewResult(data.result)
                     setProgressMessage('完成！')
                     setProgressPercent(100)
                   }
                 } catch (parseError: any) {
-                  console.error('❌ [最后] 解析失败:', parseError.message)
+                  console.error('❌ 解析最后数据失败:', parseError.message)
                 }
               }
             }
           }
-
           break
         }
 
         buffer += decoder.decode(value, { stream: true })
-        console.log('[SSE] 当前buffer长度:', buffer.length)
-        console.log('[SSE] buffer内容预览:', buffer.substring(0, 200))
-
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // 保留未完成的行
-
-        console.log('[SSE] 分割出', lines.length, '行')
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
-          console.log('[SSE] 处理行:', line.substring(0, 50))
-
           if (line.startsWith('data: ')) {
             try {
-              const jsonStr = line.slice(6)
-              console.log('[SSE] 准备解析JSON，长度:', jsonStr.length)
-
-              const data = JSON.parse(jsonStr)
-              console.log('[SSE] 接收到数据:', data.type, data)
+              const data = JSON.parse(line.slice(6))
 
               if (data.type === 'progress') {
                 setProgressMessage(data.message)
                 setProgressPercent(data.progress)
               } else if (data.type === 'complete') {
-                console.log('[SSE] 收到完成事件，设置结果')
-                console.log('[SSE] result数据:', data.result)
                 setReviewResult(data.result)
                 setProgressMessage('完成！')
                 setProgressPercent(100)
@@ -214,15 +181,7 @@ export default function SchematicUploader() {
                 throw new Error(data.error)
               }
             } catch (parseError: any) {
-              console.error('❌ 解析SSE数据失败:', parseError)
-              console.error('❌ 原始行内容:', line)
-              console.error('❌ 行长度:', line.length)
-              console.error('❌ 错误详情:', parseError.message)
-
-              // 如果是JSON解析错误，可能是数据太大被截断
-              if (parseError instanceof SyntaxError) {
-                setError('❌ 数据解析失败，可能是返回数据过大')
-              }
+              console.error('❌ 解析SSE数据失败:', parseError.message, '行长度:', line.length)
             }
           }
         }
@@ -250,8 +209,6 @@ export default function SchematicUploader() {
       setProgressMessage('')
       setProgressPercent(0)
     } finally {
-      console.log('[SSE] 流结束，设置isAnalyzing=false')
-      console.log('[SSE] 当前reviewResult:', reviewResult)
       setIsAnalyzing(false)
     }
   }

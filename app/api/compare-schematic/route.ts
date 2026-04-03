@@ -173,24 +173,6 @@ export async function POST(request: NextRequest) {
           sendProgress(3, '✓ Review报告生成完成', 95)
 
           // 发送完整结果
-          console.log('[后端] 准备发送complete事件')
-          console.log('[后端] reviewResult:', {
-            success: reviewResult.success,
-            hasReview: !!reviewResult.review,
-            reviewLength: reviewResult.review?.length,
-            comparisonScore: reviewResult.comparisonScore,
-          })
-          console.log('[后端] refResult:', {
-            success: refResult.success,
-            hasAnalysis: !!refResult.analysis,
-            method: refResult.method,
-          })
-          console.log('[后端] customerResult:', {
-            success: customerResult.success,
-            hasAnalysis: !!customerResult.analysis,
-            method: customerResult.method,
-          })
-
           const completeData = `data: ${JSON.stringify({
             type: 'complete',
             result: {
@@ -214,9 +196,7 @@ export async function POST(request: NextRequest) {
               },
             },
           })}\n\n`
-          console.log('[后端] complete数据大小:', completeData.length, 'bytes')
           controller.enqueue(encoder.encode(completeData))
-          console.log('[后端] complete事件已发送')
           controller.close()
         } catch (error: any) {
           console.error('FAE review失败:', error)

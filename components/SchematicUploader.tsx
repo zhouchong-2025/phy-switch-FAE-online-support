@@ -315,9 +315,8 @@ export default function SchematicUploader() {
             onChange={(e) => setChipModel(e.target.value)}
             className="px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-primary-500 focus:outline-none"
           >
-            <option value="YT8522">YT8522</option>
-            <option value="YT8531">YT8531</option>
-            <option value="YT8521">YT8521</option>
+            <option value="YT8522">YT8522（百兆双口PHY）</option>
+            <option value="YT8512">YT8512（百兆单口PHY）</option>
           </select>
         </div>
       )}

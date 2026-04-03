@@ -100,17 +100,30 @@ export async function POST(request: NextRequest) {
             console.log('Step 1/3: 分析参考设计（无缓存）...')
             sendProgress(1, '正在分析参考设计（首次加载需90秒）...', 10)
 
+            // 根据芯片型号确定参考设计文件名（不同芯片文件名格式不同）
+            const referenceFileMap: Record<string, string> = {
+              'YT8522': 'YT8522_REF_Schematic.pdf',
+              'YT8512': 'YT8512_reference_design.pdf',
+            }
+
+            const referenceFileName = referenceFileMap[chipModel]
+            if (!referenceFileName) {
+              sendError(`不支持的芯片型号: ${chipModel}`)
+              controller.close()
+              return
+            }
+
             const referencePDFPath = path.join(
               process.cwd(),
               'Database',
-              `${chipModel}_REF_Schematic.pdf`
+              referenceFileName
             )
 
             try {
               // 异步检查PDF是否存在
               await fsPromises.access(referencePDFPath)
             } catch {
-              sendError(`未找到${chipModel}的参考设计文件`)
+              sendError(`未找到${chipModel}的参考设计文件（期望路径: ${referenceFileName}）`)
               controller.close()
               return
             }

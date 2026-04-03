@@ -215,11 +215,14 @@ export default function SchematicUploader() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
+              console.log('[SSE] 接收到数据:', data.type, data)
 
               if (data.type === 'progress') {
                 setProgressMessage(data.message)
                 setProgressPercent(data.progress)
               } else if (data.type === 'complete') {
+                console.log('[SSE] 收到完成事件，设置结果')
+                console.log('[SSE] result数据:', data.result)
                 setReviewResult(data.result)
                 setProgressMessage('完成！')
                 setProgressPercent(100)
@@ -255,6 +258,8 @@ export default function SchematicUploader() {
       setProgressMessage('')
       setProgressPercent(0)
     } finally {
+      console.log('[SSE] 流结束，设置isAnalyzing=false')
+      console.log('[SSE] 当前reviewResult:', reviewResult)
       setIsAnalyzing(false)
     }
   }
@@ -315,8 +320,8 @@ export default function SchematicUploader() {
             onChange={(e) => setChipModel(e.target.value)}
             className="px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-primary-500 focus:outline-none"
           >
-            <option value="YT8522">YT8522（百兆双口PHY）</option>
-            <option value="YT8512">YT8512（百兆单口PHY）</option>
+            <option value="YT8522">YT8522</option>
+            <option value="YT8512">YT8512</option>
           </select>
         </div>
       )}
@@ -480,6 +485,10 @@ export default function SchematicUploader() {
       )}
 
       {/* Review结果 */}
+      {(() => {
+        console.log('[渲染] reviewResult:', reviewResult, 'mode:', mode, '显示Review结果?', !!(reviewResult && mode === 'review'))
+        return null
+      })()}
       {reviewResult && mode === 'review' && (
         <div className="space-y-6">
           {/* Review报告 */}

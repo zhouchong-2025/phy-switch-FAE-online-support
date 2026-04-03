@@ -45,7 +45,10 @@
       "Bash(npm run compare-schematic:*)",
       "Bash(npm run test-qwen3-vl:*)",
       "Bash(npm run fae-review:*)",
-      "Bash(timeout /t 5)"
+      "Bash(timeout /t 5)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ]
   }
 }

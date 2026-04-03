@@ -150,9 +150,14 @@ export default function SchematicUploader() {
 
           // 处理剩余的buffer
           if (buffer.trim()) {
-            console.log('[SSE] 处理剩余buffer:', buffer.substring(0, 100))
+            console.log('[SSE] 处理剩余buffer，长度:', buffer.length)
+            console.log('[SSE] 剩余buffer内容:', buffer.substring(0, 200))
             const lines = buffer.split('\n')
+            console.log('[SSE] 剩余buffer分割出', lines.length, '行')
+
             for (const line of lines) {
+              console.log('[SSE] [最后] 处理行:', line.substring(0, 50))
+
               if (line.startsWith('data: ')) {
                 try {
                   const jsonStr = line.slice(6)
@@ -177,10 +182,17 @@ export default function SchematicUploader() {
         }
 
         buffer += decoder.decode(value, { stream: true })
+        console.log('[SSE] 当前buffer长度:', buffer.length)
+        console.log('[SSE] buffer内容预览:', buffer.substring(0, 200))
+
         const lines = buffer.split('\n')
         buffer = lines.pop() || '' // 保留未完成的行
 
+        console.log('[SSE] 分割出', lines.length, '行')
+
         for (const line of lines) {
+          console.log('[SSE] 处理行:', line.substring(0, 50))
+
           if (line.startsWith('data: ')) {
             try {
               const jsonStr = line.slice(6)

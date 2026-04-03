@@ -1,13 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
-
-// 配置 PDF.js worker（Windows兼容）
-const workerPath = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs')
-// 将Windows路径转换为file:// URL
-const workerUrl = `file:///${workerPath.replace(/\\/g, '/')}`
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+import pdfParse from 'pdf-parse'
 
 export interface PDFChunk {
   content: string
@@ -107,22 +100,7 @@ function enhanceProductSelectionContent(content: string, fileName: string): stri
 }
 
 /**
- * 从PDF页面提取文本
- */
-async function extractPageText(page: any): Promise<string> {
-  const textContent = await page.getTextContent()
-  const textItems = textContent.items as any[]
-
-  // 将文本项按位置排序并组合
-  return textItems
-    .map((item: any) => item.str)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-/**
- * 解析单个PDF文件（使用pdfjs-dist逐页提取）
+ * 解析单个PDF文件（使用pdf-parse提取）
  */
 export async function parsePDF(filePath: string): Promise<PDFChunk[]> {
   const dataBuffer = fs.readFileSync(filePath)
@@ -130,51 +108,36 @@ export async function parsePDF(filePath: string): Promise<PDFChunk[]> {
 
   console.log(`正在解析: ${fileName}`)
 
-  // 加载PDF文档
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(dataBuffer),
-    useSystemFonts: true,
-  })
-
-  const pdfDocument = await loadingTask.promise
-  const numPages = pdfDocument.numPages
-
-  console.log(`  总页数: ${numPages}`)
+  // 使用 pdf-parse 提取文本
+  const data = await pdfParse(dataBuffer)
+  console.log(`  总页数: ${data.numpages}`)
+  console.log(`  提取文本长度: ${data.text.length} 字符`)
 
   const chunks: PDFChunk[] = []
+  const text = data.text
 
-  // 逐页提取文本
-  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    const page = await pdfDocument.getPage(pageNum)
-    const pageText = await extractPageText(page)
-
-    if (pageText.trim().length === 0) {
-      console.log(`  跳过空白页: ${pageNum}`)
-      continue
-    }
-
-    // 将每页内容分块（每500字符一块，保持完整句子）
-    // Selection Guide类文档会自动使用更大的块或整页模式
-    const pageChunks = splitIntoChunks(pageText, 500, fileName)
-
-    pageChunks.forEach((chunk, chunkIndex) => {
-      // 增强Product Selection Guide的内容
-      const enhancedChunk = enhanceProductSelectionContent(chunk, fileName)
-
-      chunks.push({
-        content: enhancedChunk.trim(),
-        metadata: {
-          source: fileName,
-          page: pageNum, // 真实的PDF页码（从1开始）
-          chunkIndex,
-        },
-      })
-    })
-
-    if (pageNum % 10 === 0) {
-      console.log(`  已处理 ${pageNum}/${numPages} 页`)
-    }
+  if (text.trim().length === 0) {
+    console.log(`  跳过空白文档`)
+    return chunks
   }
+
+  // 将内容分块（每500字符一块，保持完整句子）
+  // Selection Guide类文档会自动使用更大的块或整页模式
+  const pageChunks = splitIntoChunks(text, 500, fileName)
+
+  pageChunks.forEach((chunk, chunkIndex) => {
+    // 增强Product Selection Guide的内容
+    const enhancedChunk = enhanceProductSelectionContent(chunk, fileName)
+
+    chunks.push({
+      content: enhancedChunk.trim(),
+      metadata: {
+        source: fileName,
+        page: 1, // pdf-parse 不提供分页信息
+        chunkIndex,
+      },
+    })
+  })
 
   console.log(`  完成: 生成 ${chunks.length} 个文档块`)
 

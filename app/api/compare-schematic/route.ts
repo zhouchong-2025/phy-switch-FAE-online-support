@@ -35,6 +35,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // 验证支持的芯片型号
+    const supportedChips = ['YT8522', 'YT8512']
+    if (!supportedChips.includes(chipModel)) {
+      return NextResponse.json(
+        { error: `暂不支持 ${chipModel}，当前支持的型号：${supportedChips.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
     // 验证文件类型
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg']
     if (!validTypes.includes(customerFile.type)) {
@@ -48,16 +57,25 @@ export async function POST(request: NextRequest) {
       `FAE Review: ${chipModel}, 客户文件: ${customerFile.name}`
     )
 
-    // Step 1: 加载参考设计
-    const referencePDFPath = path.join(
-      process.cwd(),
-      'Database',
-      `${chipModel}_REF_Schematic.pdf`
-    )
+    // Step 1: 加载参考设计（支持不同命名格式）
+    const referenceFileNames = [
+      `${chipModel}_REF_Schematic.pdf`,      // YT8522 格式
+      `${chipModel}_reference_design.pdf`,   // YT8512 格式
+    ]
 
-    if (!fs.existsSync(referencePDFPath)) {
+    let referencePDFPath = ''
+    for (const fileName of referenceFileNames) {
+      const testPath = path.join(process.cwd(), 'Database', fileName)
+      if (fs.existsSync(testPath)) {
+        referencePDFPath = testPath
+        console.log(`找到参考设计: ${fileName}`)
+        break
+      }
+    }
+
+    if (!referencePDFPath) {
       return NextResponse.json(
-        { error: `未找到${chipModel}的参考设计文件` },
+        { error: `未找到${chipModel}的参考设计文件，请联系管理员` },
         { status: 404 }
       )
     }

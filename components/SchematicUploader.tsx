@@ -152,7 +152,10 @@ export default function SchematicUploader() {
             } else if (data.type === 'error') {
               throw new Error(data.error)
             } else if (data.type === 'complete') {
-              setReviewResult(data)
+              // 去除 type 字段，只保留实际结果数据
+              const { type, ...result } = data
+              setReviewResult(result)
+              console.log('Review 完成:', result)
             }
           }
         }

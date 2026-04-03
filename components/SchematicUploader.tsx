@@ -7,15 +7,6 @@
 
 import { useState, useRef, DragEvent } from 'react'
 
-interface AnalysisResult {
-  analysis?: string
-  chipModel?: string
-  duration?: number
-  method?: 'text' | 'vlm'
-  fileName?: string
-  fileSize?: number
-}
-
 interface ReviewResult {
   review?: string
   comparisonScore?: number
@@ -34,12 +25,8 @@ export default function SchematicUploader() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
-    null
-  )
   const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<'analyze' | 'review'>('analyze')
   const [chipModel, setChipModel] = useState('YT8522')
   const [progressMessage, setProgressMessage] = useState<string>('')
   const [progressPercent, setProgressPercent] = useState<number>(0)
@@ -96,7 +83,6 @@ export default function SchematicUploader() {
 
     setError(null)
     setSelectedFile(file)
-    setAnalysisResult(null)
     setReviewResult(null)
 
     // 生成预览
@@ -108,59 +94,6 @@ export default function SchematicUploader() {
       reader.readAsDataURL(file)
     } else {
       setPreviewUrl(null)
-    }
-  }
-
-  const handleAnalyze = async () => {
-    if (!selectedFile) return
-
-    setIsAnalyzing(true)
-    setError(null)
-    setAnalysisResult(null)
-
-    try {
-      const formData = new FormData()
-      formData.append('schematic', selectedFile)
-
-      const response = await fetch('/api/analyze-schematic', {
-        method: 'POST',
-        body: formData,
-      })
-
-      // 检查响应Content-Type，防止解析HTML错误页
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text()
-        throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 200)}`)
-      }
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || '分析失败')
-      }
-
-      setAnalysisResult(data)
-    } catch (err: any) {
-      console.error('分析错误:', err)
-
-      // 友好的错误提示
-      let errorMessage = '分析失败'
-      if (err.message.includes('fetch') || err.message.includes('网络')) {
-        errorMessage = '❌ 网络连接失败，请检查网络后重试'
-      } else if (err.message.includes('timeout') || err.message.includes('超时')) {
-        errorMessage = '❌ 分析超时（可能文件过大），请稍后重试'
-      } else if (err.message.includes('500')) {
-        errorMessage = '❌ 服务器错误，请稍后重试或联系技术支持'
-      } else if (err.message.includes('400') || err.message.includes('格式')) {
-        errorMessage = '❌ 文件格式或大小不符合要求'
-      } else {
-        errorMessage = `❌ ${err.message}`
-      }
-
-      setError(errorMessage)
-    } finally {
-      setIsAnalyzing(false)
     }
   }
 
@@ -267,7 +200,6 @@ export default function SchematicUploader() {
   const handleReset = () => {
     setSelectedFile(null)
     setPreviewUrl(null)
-    setAnalysisResult(null)
     setReviewResult(null)
     setError(null)
     if (fileInputRef.current) {
@@ -283,48 +215,22 @@ export default function SchematicUploader() {
           原理图智能分析
         </h2>
         <p className="text-gray-400">
-          上传原理图，获取专业的FAE级别分析和优化建议
+          上传客户原理图，自动对比参考设计，获取专业的FAE Review报告
         </p>
       </div>
 
-      {/* 模式切换 */}
-      <div className="flex justify-center gap-4">
-        <button
-          onClick={() => setMode('analyze')}
-          className={`px-6 py-2 rounded-lg font-medium transition-all ${
-            mode === 'analyze'
-              ? 'bg-primary-600 text-white shadow-lg'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
+      {/* 芯片型号选择 */}
+      <div className="flex items-center justify-center gap-4">
+        <label className="text-white font-medium">芯片型号：</label>
+        <select
+          value={chipModel}
+          onChange={(e) => setChipModel(e.target.value)}
+          className="px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-primary-500 focus:outline-none"
         >
-          📊 单独分析
-        </button>
-        <button
-          onClick={() => setMode('review')}
-          className={`px-6 py-2 rounded-lg font-medium transition-all ${
-            mode === 'review'
-              ? 'bg-primary-600 text-white shadow-lg'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          🔍 FAE Review
-        </button>
+          <option value="YT8522">YT8522</option>
+          <option value="YT8512">YT8512</option>
+        </select>
       </div>
-
-      {/* 芯片型号选择（仅Review模式） */}
-      {mode === 'review' && (
-        <div className="flex items-center justify-center gap-4">
-          <label className="text-white font-medium">芯片型号：</label>
-          <select
-            value={chipModel}
-            onChange={(e) => setChipModel(e.target.value)}
-            className="px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="YT8522">YT8522</option>
-            <option value="YT8512">YT8512</option>
-          </select>
-        </div>
-      )}
 
       {/* 上传区域 */}
       <div
@@ -392,23 +298,13 @@ export default function SchematicUploader() {
 
             {/* 操作按钮 */}
             <div className="flex gap-4 justify-center">
-              {mode === 'analyze' ? (
-                <button
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing}
-                  className="px-8 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors"
-                >
-                  {isAnalyzing ? '分析中...' : '开始分析'}
-                </button>
-              ) : (
-                <button
-                  onClick={handleReview}
-                  disabled={isAnalyzing}
-                  className="px-8 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors"
-                >
-                  {isAnalyzing ? 'Review中...' : '开始Review'}
-                </button>
-              )}
+              <button
+                onClick={handleReview}
+                disabled={isAnalyzing}
+                className="px-8 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              >
+                {isAnalyzing ? 'Review中...' : '开始Review'}
+              </button>
               <button
                 onClick={handleReset}
                 disabled={isAnalyzing}
@@ -427,11 +323,9 @@ export default function SchematicUploader() {
           <div className="text-center mb-4">
             <div className="animate-spin text-5xl mb-4">⚙️</div>
             <p className="text-white font-medium mb-2">
-              {mode === 'analyze'
-                ? '正在分析原理图...'
-                : progressMessage || '正在生成FAE Review...'}
+              {progressMessage || '正在生成FAE Review...'}
             </p>
-            {mode === 'review' && progressPercent > 0 && (
+            {progressPercent > 0 && (
               <div className="mt-4">
                 {/* 进度条 */}
                 <div className="w-full bg-gray-700 rounded-full h-3 mb-2 overflow-hidden">
@@ -444,9 +338,7 @@ export default function SchematicUploader() {
               </div>
             )}
             <p className="text-gray-400 text-sm mt-2">
-              {mode === 'analyze'
-                ? '使用VLM深度识别中，预计需要1-2分钟'
-                : '正在对比参考设计并���成专业建议'}
+              正在对比参考设计并生成专业建议
             </p>
           </div>
         </div>
@@ -460,36 +352,8 @@ export default function SchematicUploader() {
       )}
 
       {/* 分析结果 */}
-      {analysisResult && mode === 'analyze' && (
-        <div className="bg-gray-800 rounded-lg p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-700 pb-4">
-            <h3 className="text-2xl font-bold text-white">分析结果</h3>
-            <div className="flex gap-4 text-sm text-gray-400">
-              <span>
-                方式：{analysisResult.method === 'vlm' ? '🔍 VLM视觉' : '📝 文本'}
-              </span>
-              <span>耗时：{((analysisResult.duration || 0) / 1000).toFixed(1)}秒</span>
-              {analysisResult.chipModel && (
-                <span className="text-primary-400 font-medium">
-                  芯片：{analysisResult.chipModel}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="prose prose-invert max-w-none">
-            <pre className="whitespace-pre-wrap text-gray-300 bg-gray-900 p-4 rounded-lg overflow-x-auto">
-              {analysisResult.analysis}
-            </pre>
-          </div>
-        </div>
-      )}
-
       {/* Review结果 */}
-      {(() => {
-        console.log('[渲染] reviewResult:', reviewResult, 'mode:', mode, '显示Review结果?', !!(reviewResult && mode === 'review'))
-        return null
-      })()}
-      {reviewResult && mode === 'review' && (
+      {reviewResult && (
         <div className="space-y-6">
           {/* Review报告 */}
           <div className="bg-gray-800 rounded-lg p-6 space-y-4">

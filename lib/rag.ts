@@ -136,9 +136,238 @@ function expandQueryTerms(question: string): string {
 }
 
 /**
- * 从文本中提取芯片型号
+ * 准备RAG上下文：提取共享的文档检索和上下文构建逻辑
  */
-function extractModelNumbers(text: string): string[] {
+async function prepareRAGContext(
+  question: string,
+  history: HistoryMessage[] = []
+) {
+  console.log('收到用户问题:', question)
+
+  // 检测是否是选型/推荐类问题
+  const isSelectionQuery = /推荐|选型|有哪些|什么型号|选择|适合|可以用|有没有|建议/i.test(question)
+
+  // 提取当前问题中的型号
+  let modelNumbers = extractModelNumbers(question)
+
+  // 如果当前问题没有型号，且不是选型问题，从历史中提取（最近3条）
+  if (modelNumbers.length === 0 && history.length > 0 && !isSelectionQuery) {
+    console.log('当前问题无型号，从历史中提取...')
+    const recentHistory = history.slice(-6) // 最近3轮对话（6条消息）
+
+    for (const msg of recentHistory) {
+      const historicalModels = extractModelNumbers(msg.content)
+      modelNumbers.push(...historicalModels)
+    }
+
+    modelNumbers = [...new Set(modelNumbers)] // 去重
+
+    // TX vs T1 冲突检测：如果用户问TX，排除T1芯片
+    const askingForTX = /\bTX\b/i.test(question) && !/\bT1\b/i.test(question)
+    const askingForT1 = /\bT1\b/i.test(question) && !/\bTX\b/i.test(question)
+
+    if (askingForTX || askingForT1) {
+      // T1芯片型号列表
+      const t1Chips = ['YT8010A', 'YT8010AN', 'YT8011A', 'YT8011AN', 'YT8011AR']
+
+      if (askingForTX) {
+        // 用户问TX，排除T1芯片
+        const filteredModels = modelNumbers.filter(m => !t1Chips.includes(m.toUpperCase()))
+        if (filteredModels.length < modelNumbers.length) {
+          console.log(`检测到TX查询，过滤T1芯片: ${modelNumbers.join(',')} -> ${filteredModels.join(',')}`)
+          modelNumbers = filteredModels
+        }
+      } else if (askingForT1) {
+        // 用户问T1，只保留T1芯片（如果有）
+        const t1Models = modelNumbers.filter(m => t1Chips.includes(m.toUpperCase()))
+        if (t1Models.length > 0) {
+          console.log(`检测到T1查询，只保留T1芯片: ${modelNumbers.join(',')} -> ${t1Models.join(',')}`)
+          modelNumbers = t1Models
+        }
+      }
+    }
+
+    if (modelNumbers.length > 0) {
+      console.log('从历史中提取到型号:', modelNumbers)
+      // 扩展查询：将历史型号添加到查询中
+      question = `${modelNumbers.join('和')} ${question}`
+      console.log('扩展后的查询:', question)
+    }
+  } else if (isSelectionQuery) {
+    console.log('检测到选型问题，不从历史提取型号')
+  }
+
+  // 扩展查询术语（商规->消费级，千兆->GE等）
+  const expandedQuestion = expandQueryTerms(question)
+  if (expandedQuestion !== question) {
+    console.log('术语扩展后的查询:', expandedQuestion)
+  }
+
+  // 动态计算最优检索数量
+  const optimalSearchCount = getOptimalSearchCount(expandedQuestion, modelNumbers)
+
+  // 1. 检索相关文档（使用动态数量）
+  const searchResults = await searchDocuments(expandedQuestion, optimalSearchCount)
+
+  console.log(`检索到 ${searchResults.length} 个相关文档块`)
+  if (searchResults.length > 0) {
+    console.log('相似度分布:', searchResults.map(r =>
+      `${r.source.substring(0, 20)}... (${(r.similarity * 100).toFixed(1)}%)`
+    ))
+  }
+
+  // 硬件设计查询增强：如果是硬件设计问题，强制补充Datasheet的Application章节
+  const isHardwareDesignQuery = /硬件.*设计|设计.*硬件|hardware.*design|design.*hardware|电路.*设计|设计.*注意|application.*circuit|pcb.*layout/i.test(question)
+
+  if (isHardwareDesignQuery && modelNumbers.length > 0) {
+    console.log('检测到硬件设计查询，检查是否需要补充Application章节...')
+
+    // 检查是否已包含Datasheet的Application Diagram章节（第17页）
+    const hasApplicationDiagram = searchResults.some(r =>
+      r.source.includes('Datasheet') &&
+      r.content.toLowerCase().includes('application diagram')
+    )
+
+    if (!hasApplicationDiagram) {
+      console.log('缺少Application Diagram章节，正在补充...')
+
+      // 搜索Application Diagram章节
+      const appQuery = `${modelNumbers.join(' ')} Application Diagram circuit schematic`
+      const additionalResults = await searchDocuments(appQuery, 5)
+      const appDiagramResults = additionalResults.filter(r =>
+        r.source.includes('Datasheet') &&
+        (r.content.toLowerCase().includes('application') || r.content.toLowerCase().includes('diagram'))
+      )
+
+      if (appDiagramResults.length > 0) {
+        console.log(`补充了 ${appDiagramResults.length} 个Application相关章节`)
+        // 插入到前面（优先级较高）
+        searchResults.splice(3, 0, ...appDiagramResults.slice(0, 1))
+      }
+    }
+  }
+
+  // 选型查询增强：如果是选型问题，且结果中没有Product Selection Guide，则强制添加
+  const hasProductGuideStream = searchResults.some(r => r.source.includes('Product Selection Guide'))
+
+  if (isSelectionQuery && !hasProductGuideStream) {
+    console.log('检测到选型查询，但缺少Product Selection Guide，正在补充...')
+
+    // 直接搜索Product Selection Guide
+    const selectionQuery = 'Product Selection Guide 产品选型 型号对比 产品系列'
+    const additionalResults = await searchDocuments(selectionQuery, 8)
+    const productGuideResults = additionalResults.filter(r =>
+      r.source.includes('Product Selection Guide')
+    )
+
+    if (productGuideResults.length > 0) {
+      console.log(`补充了 ${productGuideResults.length} 个Product Selection Guide文档`)
+      // 将Product Selection Guide结果插入到最前面（优先级最高）
+      searchResults.unshift(...productGuideResults.slice(0, 2))
+    }
+  }
+
+  // 车规查询增强：如果问题包含车规相关关键词，且结果中没有Product Selection Guide，则强制添加
+  const isAutomotiveQuery = /车规|automotive|AEC-Q100|车载/i.test(question)
+
+  if (isAutomotiveQuery && !searchResults.some(r => r.source.includes('Product Selection Guide'))) {
+    console.log('检测到车规查询，但缺少Product Selection Guide，正在补充...')
+
+    // 直接搜索Product Selection Guide中包含Automotive的内容（减少到8个）
+    const automotiveQuery = modelNumbers.length > 0
+      ? `${modelNumbers.join(' ')} Automotive AEC-Q100 车规`
+      : 'Automotive AEC-Q100 车规'
+
+    const additionalResults = await searchDocuments(automotiveQuery, 8)
+    const productGuideResults = additionalResults.filter(r =>
+      r.source.includes('Product Selection Guide') &&
+      (r.content.includes('Automotive') || r.content.includes('AEC-Q100') || r.content.includes('车规'))
+    )
+
+    if (productGuideResults.length > 0) {
+      console.log(`补充了 ${productGuideResults.length} 个Product Selection Guide车规相关文档`)
+      // 将Product Selection Guide结果插入到前2位（减少补充数量）
+      searchResults.splice(2, 0, ...productGuideResults.slice(0, 1))
+    }
+  }
+
+  if (searchResults.length === 0) {
+    return {
+      searchResults: [],
+      retrievedChunks: '',
+      messages: [],
+      sources: [],
+    }
+  }
+
+  // 2. 构建上下文
+  const retrievedChunks = searchResults
+    .map(
+      (result, idx) =>
+        `[文档${idx + 1}] 来源: ${result.source} (第${result.page}页)\n${result.content}`
+    )
+    .join('\n\n---\n\n')
+
+  // 3. 构建对话消息（包含历史）
+  const messages: any[] = [
+    {
+      role: 'system',
+      content: SYSTEM_PROMPT,
+    }
+  ]
+
+  // 添加历史消息（最近3轮）
+  if (history.length > 0) {
+    const recentHistory = history.slice(-6) // 最近3轮对话
+    recentHistory.forEach(msg => {
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+      })
+    })
+  }
+
+  // 添加当前问题和检索到的文档
+  messages.push({
+    role: 'user',
+    content: `【文档片段】\n${retrievedChunks}\n\n【用户问题】\n${question}`,
+  })
+
+  // 4. 提取引用来源并合并同一文档的多个引用
+  const sourceMap = new Map<string, Set<number>>()
+
+  searchResults.forEach((r) => {
+    if (!sourceMap.has(r.source)) {
+      sourceMap.set(r.source, new Set())
+    }
+    sourceMap.get(r.source)!.add(r.page)
+  })
+
+  const sources = Array.from(sourceMap.entries()).map(([source, pagesSet]) => {
+    // 排序页码
+    const pages = Array.from(pagesSet).sort((a, b) => a - b)
+
+    // 格式化页码显示
+    let pageDisplay: string
+    if (pages.length === 1) {
+      pageDisplay = `第${pages[0]}页`
+    } else if (pages.length <= 3) {
+      pageDisplay = `第${pages.join(',')}页`
+    } else {
+      // 超过3个页码，显示范围
+      pageDisplay = `第${pages[0]},${pages[1]},...,${pages[pages.length - 1]}页 (共${pages.length}处)`
+    }
+
+    return `${source} (${pageDisplay})`
+  })
+
+  return {
+    searchResults,
+    retrievedChunks,
+    messages,
+    sources,
+  }
+}
   const results: string[] = []
 
   // 1. 匹配完整格式：YT8522, YT8512等

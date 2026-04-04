@@ -223,6 +223,51 @@ export default function SchematicUploader() {
     }
   }
 
+  const handleExportReport = () => {
+    if (!reviewResult) return
+
+    const markdown = `# FAE Review 报告
+
+## 基本信息
+- **芯片型号**: ${chipModel}
+- **符合度**: ${reviewResult.comparisonScore || 'N/A'}%
+- **分析时间**: ${new Date().toLocaleString('zh-CN')}
+- **总耗时**: ${((reviewResult.durations?.total || 0) / 1000).toFixed(1)}秒
+
+---
+
+## Review 报���
+
+${reviewResult.review}
+
+---
+
+## 参考设计分析
+
+${reviewResult.referenceAnalysis}
+
+---
+
+## 客户设计分析
+
+${reviewResult.customerAnalysis}
+
+---
+
+*本报告由 FAE 原理图智能分析系统自动生成*
+`
+
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${chipModel}_FAE_Review_${Date.now()}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="w-full max-w-5xl mx-auto p-6 space-y-6">
       {/* 标题 */}
@@ -375,15 +420,23 @@ export default function SchematicUploader() {
           <div className="bg-gray-800 rounded-lg p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-gray-700 pb-4">
               <h3 className="text-2xl font-bold text-white">FAE Review 报告</h3>
-              <div className="flex gap-4 text-sm text-gray-400">
+              <div className="flex items-center gap-4">
                 {reviewResult.comparisonScore && (
                   <span className="text-primary-400 font-bold text-lg">
                     符合度：{reviewResult.comparisonScore}%
                   </span>
                 )}
-                <span>
+                <span className="text-sm text-gray-400">
                   总耗时：{((reviewResult.durations?.total || 0) / 1000).toFixed(1)}秒
                 </span>
+                <button
+                  onClick={handleExportReport}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors text-sm flex items-center gap-2"
+                  title="导出报告为 Markdown 文件"
+                >
+                  <span>📥</span>
+                  <span>导出报告</span>
+                </button>
               </div>
             </div>
             <div className="prose prose-invert max-w-none">

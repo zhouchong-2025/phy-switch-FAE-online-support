@@ -15,6 +15,15 @@ import path from 'path'
 export const runtime = 'nodejs'
 export const maxDuration = 300 // Vercel Hobby计划最大允许300秒
 
+/**
+ * 验证芯片型号格式，防止路径遍历攻击
+ */
+function validateChipModel(chipModel: string): boolean {
+  // 只允许YT开头 + 4位数字 + 可选的大写字母后缀
+  const validPattern = /^YT\d{4}[A-Z]?$/
+  return validPattern.test(chipModel)
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -31,6 +40,15 @@ export async function POST(request: NextRequest) {
     if (!chipModel) {
       return NextResponse.json(
         { error: '请指定芯片型号' },
+        { status: 400 }
+      )
+    }
+
+    // 验证芯片型号格式（安全性：防止路径遍历攻击）
+    if (!validateChipModel(chipModel)) {
+      console.warn('⚠️ 检测到无效的芯片型号:', chipModel)
+      return NextResponse.json(
+        { error: '无效的芯片型号格式' },
         { status: 400 }
       )
     }

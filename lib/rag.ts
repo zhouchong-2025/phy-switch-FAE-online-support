@@ -368,13 +368,18 @@ async function prepareRAGContext(
     sources,
   }
 }
+
+/**
+ * 从文本中提取芯片型号
+ */
+function extractModelNumbers(text: string): string[] {
   const results: string[] = []
 
   // 1. 匹配完整格式：YT8522, YT8512等
   const fullMatches = text.match(/YT\d{3,4}[A-Z]*/gi) || []
   results.push(...fullMatches.map(m => m.toUpperCase()))
 
-  // 2. 匹配简���格式：8522, 8512等（4位数字，使用word boundary）
+  // 2. 匹配简化格式：8522, 8512等（4位数字，使用word boundary）
   const shortMatches = text.match(/\b\d{4}\b/g) || []
   for (const match of shortMatches) {
     // 只处理85xx系列（裕太微PHY芯片的型号范围）
